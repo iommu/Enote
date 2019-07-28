@@ -28,7 +28,7 @@ CircuitPython driver for Adafruit ePaper display breakouts
 
 import time
 from micropython import const
-from digitalio import Direction
+from machine import Pin
 
 class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-public-methods
     """Base class for EPD displays
@@ -45,27 +45,23 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
         self._width = width
         self._height = height
 
-        # Setup reset pin, if we have one
+        # Setup reset pin
         self._rst = rst_pin
-        if rst_pin:
-            self._rst.direction = Direction.OUTPUT
+        self._rst.init(self._rst.OUT, value=0)
 
-        # Setup busy pin, if we have one
+        # Setup busy pin
         self._busy = busy_pin
-        if busy_pin:
-            self._busy.direction = Direction.INPUT
+        self._busy.init(self._busy.IN)
 
-        # Setup dc pin (required)
+        # Setup dc pin
         self._dc = dc_pin
-        self._dc.direction = Direction.OUTPUT
-        self._dc.value = False
+        self._dc.init(self._dc.OUT, value=0)
 
-        # Setup cs pin (required)
+        # Setup cs pin
         self._cs = cs_pin
-        self._cs.direction = Direction.OUTPUT
-        self._cs.value = True
+        self._cs.init(self._cs.OUT, value=1)
 
-        # SPI interface (required)
+        # SPI interface
         self.spi_device = spi
         self._spibuf = bytearray(1)
         self._single_byte_tx = False
