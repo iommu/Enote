@@ -84,12 +84,12 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
 
         while not self.spi_device.try_lock():
             pass
-        self._dc.value = True
+        self._dc(1)
 
         for databyte in self._buffer1:
             self._spi_transfer(databyte)
 
-        self._cs.value = True
+        self._cs(1)
         self.spi_device.unlock()
         time.sleep(.002)
 
@@ -98,41 +98,39 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
 
             while not self.spi_device.try_lock():
                 pass
-            self._dc.value = True
+            self._dc(1)
 
             for databyte in self._buffer2:
                 self._spi_transfer(databyte)
 
-            self._cs.value = True
+            self._cs(1)
             self.spi_device.unlock()
 
         self.update()
 
 
     def hardware_reset(self):
-        """If we have a reset pin, do a hardware reset by toggling it"""
-        if self._rst:
-            self._rst.value = False
-            time.sleep(0.1)
-            self._rst.value = True
-            time.sleep(0.1)
+        self._rst(0)
+        time.sleep(0.1)
+        self._rst(1)
+        time.sleep(0.1)
 
     def command(self, cmd, data=None, end=True):
         """Send command byte to display."""
-        self._cs.value = True
-        self._dc.value = False
-        self._cs.value = False
+        self._cs(1)
+        self._dc(0)
+        self._cs(0)
 
         while not self.spi_device.try_lock():
             pass
         ret = self._spi_transfer(cmd)
 
         if data is not None:
-            self._dc.value = True
+            self._dc(1)
             for b in data:
                 self._spi_transfer(b)
         if end:
-            self._cs.value = True
+            self._cs(1)
         self.spi_device.unlock()
 
         return ret
@@ -141,10 +139,10 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
         """Transfer one byte, toggling the cs pin if required by the EPD chipset"""
         self._spibuf[0] = databyte
         if self._single_byte_tx:
-            self._cs.value = False
+            self._cs(0)
         self.spi_device.write_readinto(self._spibuf, self._spibuf)
         if self._single_byte_tx:
-            self._cs.value = True
+            self._cs(1)
         return self._spibuf[0]
 
     def power_up(self):
