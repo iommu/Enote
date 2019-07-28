@@ -29,7 +29,6 @@ CircuitPython driver for Adafruit ePaper display breakouts
 import time
 from micropython import const
 from digitalio import Direction
-from adafruit_epd import mcp_sram
 
 class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-public-methods
     """Base class for EPD displays
@@ -42,7 +41,7 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
     LIGHT = const(5)
 
 
-    def __init__(self, width, height, spi, cs_pin, dc_pin, sramcs_pin, rst_pin, busy_pin): # pylint: disable=too-many-arguments
+    def __init__(self, width, height, spi, cs_pin, dc_pin, rst_pin, busy_pin): # pylint: disable=too-many-arguments
         self._width = width
         self._height = height
 
@@ -71,10 +70,6 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
         self._spibuf = bytearray(1)
         self._single_byte_tx = False
 
-        self.sram = None
-        if sramcs_pin:
-            self.sram = mcp_sram.Adafruit_MCP_SRAM(sramcs_pin, spi)
-
         self._buf = bytearray(3)
         self._buffer1_size = self._buffer2_size = 0
         self._buffer1 = self._buffer2 = None
@@ -89,72 +84,31 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
 
         self.set_ram_address(0, 0)
 
-        if self.sram:
-            while not self.spi_device.try_lock():
-                pass
-            self.sram.cs_pin.value = False
-            #send read command
-            self._buf[0] = mcp_sram.Adafruit_MCP_SRAM.SRAM_READ
-            #send start address
-            self._buf[1] = 0
-            self._buf[2] = 0
-            self.spi_device.write(self._buf, end=3)
-            self.spi_device.unlock()
-
-        #first data byte from SRAM will be transfered in at the
-        #same time as the EPD command is transferred out
         databyte = self.write_ram(0)
 
         while not self.spi_device.try_lock():
             pass
         self._dc.value = True
 
-        if self.sram:
-            for _ in range(self._buffer1_size):
-                databyte = self._spi_transfer(databyte)
-            self.sram.cs_pin.value = True
-        else:
-            for databyte in self._buffer1:
-                self._spi_transfer(databyte)
+        for databyte in self._buffer1:
+            self._spi_transfer(databyte)
 
         self._cs.value = True
         self.spi_device.unlock()
         time.sleep(.002)
 
-        if self.sram:
-            while not self.spi_device.try_lock():
-                pass
-            self.sram.cs_pin.value = False
-            #send read command
-            self._buf[0] = mcp_sram.Adafruit_MCP_SRAM.SRAM_READ
-            #send start address
-            self._buf[1] = (self._buffer1_size >> 8) & 0xFF
-            self._buf[2] = self._buffer1_size & 0xFF
-            self.spi_device.write(self._buf, end=3)
-            self.spi_device.unlock()
-
         if self._buffer2_size != 0:
-            #first data byte from SRAM will be transfered in at the
-            #same time as the EPD command is transferred out
             databyte = self.write_ram(1)
 
             while not self.spi_device.try_lock():
                 pass
             self._dc.value = True
 
-            if self.sram:
-                for _ in range(self._buffer2_size):
-                    databyte = self._spi_transfer(databyte)
-                self.sram.cs_pin.value = True
-            else:
-                for databyte in self._buffer2:
-                    self._spi_transfer(databyte)
+            for databyte in self._buffer2:
+                self._spi_transfer(databyte)
 
             self._cs.value = True
             self.spi_device.unlock()
-        else:
-            if self.sram:
-                self.sram.cs_pin.value = True
 
         self.update()
 
@@ -258,12 +212,8 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
         red_fill = ((color == Adafruit_EPD.RED) != self._color_inverted) * 0xFF
         black_fill = ((color == Adafruit_EPD.BLACK) != self._black_inverted) * 0xFF
 
-        if self.sram:
-            self.sram.erase(0x00, self._buffer1_size, black_fill)
-            self.sram.erase(self._buffer1_size, self._buffer2_size, red_fill)
-        else:
-            self._blackframebuf.fill(black_fill)
-            self._colorframebuf.fill(red_fill)
+        self._blackframebuf.fill(black_fill)
+        self._colorframebuf.fill(red_fill)
 
     def rect(self, x, y, width, height, color):     # pylint: disable=too-many-arguments
         """draw a rectangle"""
@@ -345,11 +295,8 @@ class Adafruit_EPD: # pylint: disable=too-many-instance-attributes, too-many-pub
 
                 if pixel == (0xFF, 0, 0):
                     addr = addr + self._buffer1_size
-                current = self.sram.read8(addr)
 
                 if pixel in ((0xFF, 0, 0), (0, 0, 0)):
                     current = current & ~(1 << (7 - y%8))
                 else:
                     current = current | (1 << (7 - y%8))
-
-                self.sram.write8(addr, current)
